@@ -239,7 +239,7 @@ export default function StakingDashboard() {
   const sendAndConfirm = async (
     conn: Connection,
     tx: Transaction,
-    sign: typeof signTransaction
+    sign: NonNullable<typeof signTransaction>
   ): Promise<string> => {
     const { blockhash } = await conn.getLatestBlockhash("confirmed");
     tx.recentBlockhash = blockhash;
@@ -272,12 +272,12 @@ export default function StakingDashboard() {
       let signature: string;
       let conn: Connection = connection;
       try {
-        signature = await sendAndConfirm(conn, tx, signTransaction);
+        signature = await sendAndConfirm(conn, tx, signTransaction!);
       } catch (sendErr: unknown) {
         const msg = (sendErr as Error).message ?? "";
         if (isRpcForbidden(sendErr) && RPC_FALLBACK_URL) {
           conn = new Connection(RPC_FALLBACK_URL, "confirmed");
-          signature = await sendAndConfirm(conn, tx, signTransaction);
+          signature = await sendAndConfirm(conn, tx, signTransaction!);
         } else if (
           msg.includes("Blockhash not found") ||
           msg.includes("blockhash not found")
@@ -287,7 +287,7 @@ export default function StakingDashboard() {
             publicKey,
             parsedAmount
           );
-          signature = await sendAndConfirm(conn, txRetry, signTransaction);
+          signature = await sendAndConfirm(conn, txRetry, signTransaction!);
         } else {
           throw sendErr;
         }
@@ -332,20 +332,20 @@ export default function StakingDashboard() {
       let signature: string;
       let conn: Connection = connection;
       try {
-        signature = await sendAndConfirm(conn, tx, signTransaction);
+        signature = await sendAndConfirm(conn, tx, signTransaction!);
       } catch (sendErr: unknown) {
         const msg = (sendErr as Error).message ?? "";
         if (isRpcForbidden(sendErr) && RPC_FALLBACK_URL) {
           console.log("[Stake-SOL] Primary RPC failed, retrying with fallback...");
           conn = new Connection(RPC_FALLBACK_URL, "confirmed");
-          signature = await sendAndConfirm(conn, tx, signTransaction);
+          signature = await sendAndConfirm(conn, tx, signTransaction!);
         } else if (
           msg.includes("Blockhash not found") ||
           msg.includes("blockhash not found")
         ) {
           console.log("[Stake-SOL] Blockhash expired, retrying with fresh blockhash...");
           tx = buildSolTransferTx(publicKey, sol);
-          signature = await sendAndConfirm(conn, tx, signTransaction);
+          signature = await sendAndConfirm(conn, tx, signTransaction!);
         } else {
           throw sendErr;
         }
