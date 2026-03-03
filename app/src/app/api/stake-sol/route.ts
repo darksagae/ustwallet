@@ -49,16 +49,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const activeStake = await prisma.stake.findFirst({
-      where: { wallet, status: "active" },
-    });
-    if (activeStake) {
-      return NextResponse.json(
-        { error: "You already have an active stake. Wait for unlock." },
-        { status: 409 }
-      );
-    }
-
     let connection = new Connection(RPC_URL, "confirmed");
     let txInfo: Awaited<ReturnType<Connection["getTransaction"]>>;
     try {

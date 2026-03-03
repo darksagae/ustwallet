@@ -98,7 +98,7 @@ export default function StakingDashboard() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [poolData, setPoolData] = useState<PoolInfo | null>(null);
-  const [stakeData, setStakeData] = useState<StakeInfo | null>(null);
+  const [stakes, setStakes] = useState<StakeInfo[]>([]);
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
   const [referralData, setReferralData] = useState<ReferralInfo | null>(null);
   const [claimLoading, setClaimLoading] = useState(false);
@@ -206,8 +206,8 @@ export default function StakingDashboard() {
     if (!publicKey) return;
     const walletStr = publicKey.toBase58();
     try {
-      const { stake, pool } = await fetchStakeFromApi(walletStr);
-      setStakeData(stake);
+      const { stakes, pool } = await fetchStakeFromApi(walletStr);
+      setStakes(stakes);
       setPoolData(pool);
     } catch {
       // may not exist yet
@@ -375,21 +375,10 @@ export default function StakingDashboard() {
     }
   };
 
-  const stakeAmount = stakeData?.amount ?? 0;
-  const stakeTierBps = stakeData?.tierBps ?? 0;
-  const stakeStart = stakeData?.startTime ?? 0;
-  const stakeUnlock = stakeData?.unlockTime ?? 0;
-  const stakeTotalReward = stakeData?.totalReward ?? 0;
-  const stakeStatus = stakeData?.status ?? "";
+  const hasStakes = stakes.length > 0;
+  const totalStakeAmount = stakes.reduce((sum, s) => sum + s.amount, 0);
 
-  const accrued =
-    stakeData && stakeStatus === "active"
-      ? computeAccruedReward(stakeAmount, stakeTierBps, stakeStart, now)
-      : 0;
-
-  const daysRemaining = stakeData
-    ? Math.max(0, Math.ceil((stakeUnlock - now) / 86400))
-    : 0;
+  const anyActiveStake = stakes.some((s) => s.status === "active");
 
   const poolTotalStaked = poolData?.totalStaked ?? 0;
   const poolCap = poolData?.capTotalStaked ?? CAP_DISPLAY;
@@ -686,193 +675,256 @@ export default function StakingDashboard() {
               <p className="text-slate-500 text-sm">
                 Connect your wallet to view your position.
               </p>
-            ) : !stakeData ? (
-              <p className="text-slate-500 text-sm">No active stake found.</p>
+            ) : !hasStakes ? (
+              <p className="text-slate-500 text-sm">
+                No active or unlocked stakes found.
+              </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Staked</span>
+                  <span className="text-slate-400">Total Staked</span>
                   <span className="font-semibold">
-                    {formatUstRaw(stakeAmount)} UST
+                    {formatUstRaw(totalStakeAmount)} UST
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Rate</span>
-                  <span>
-                    {(stakeTierBps / 100).toFixed(1)}% daily
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Total Reward at Unlock</span>
-                  <span className="text-emerald-400">
-                    {formatUstRaw(stakeTotalReward)} UST
-                  </span>
-                </div>
+                <p className="text-xs text-slate-500">
+                  {stakes.length} active/unlocked{" "}
+                  {stakes.length === 1 ? "position" : "positions"}.
+                </p>
 
-                <div className="p-4 bg-gradient-to-br from-emerald-950/40 to-indigo-950/40 rounded-xl border border-emerald-500/20 mt-2">
-                  <p className="text-xs text-slate-400 mb-1">Accrued So Far</p>
-                  <p className="text-2xl font-bold text-emerald-400 glow-emerald">
-                    {formatUstRaw(accrued)} UST
-                  </p>
-                </div>
+                <div className="mt-2 space-y-4">
+                  {stakes.map((s) => {
+                    const stakeAccrued =
+                      s.status === "active"
+                        ? computeAccruedReward(
+                            s.amount,
+                            s.tierBps,
+                            s.startTime,
+                            now
+                          )
+                        : 0;
+                    const daysRemaining = Math.max(
+                      0,
+                      Math.ceil((s.unlockTime - now) / 86400)
+                    );
+                    const isUnlocked = s.status === "unlocked";
 
-                {stakeStatus === "active" && stakeAmount > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs text-slate-400 mb-1">
-                      Progress to Unlock
-                    </p>
-                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                    return (
                       <div
-                        className="h-full bg-emerald-500 rounded-full transition-all"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            ((now - stakeStart) / (86400 * LOCK_DAYS)) * 100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Unlock In</span>
-                  <span
-                    className={
-                      daysRemaining === 0
-                        ? "text-emerald-400"
-                        : "text-amber-400"
-                    }
-                  >
-                    {daysRemaining === 0
-                      ? "Unlocked!"
-                      : `${daysRemaining} days`}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Unlock Date</span>
-                  <span>
-                    {new Date(stakeUnlock * 1000).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Status</span>
-                  <span
-                    className={
-                      stakeStatus === "claimed"
-                        ? "text-slate-500"
-                        : "text-emerald-400"
-                    }
-                  >
-                    {stakeStatus === "active"
-                      ? "Locked"
-                      : stakeStatus === "unlocked"
-                      ? "Unlocked — choose Withdraw or Restake"
-                      : "Claimed"}
-                  </span>
-                </div>
-
-                {stakeData.childWallet && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">Child Wallet</span>
-                    <a
-                      href={`https://explorer.solana.com/address/${stakeData.childWallet}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-400 hover:underline font-mono text-xs"
-                    >
-                      {stakeData.childWallet.slice(0, 6)}...
-                      {stakeData.childWallet.slice(-4)}
-                    </a>
-                  </div>
-                )}
-
-                {daysRemaining === 0 && stakeStatus === "active" && (
-                  <p className="text-sm text-emerald-300 mt-2 bg-emerald-950/30 px-3 py-2 rounded-lg">
-                    When unlocked, you can withdraw to your wallet or restake at {RESTAKE_DAILY_PCT}% for another 90 days.
-                  </p>
-                )}
-
-                {stakeStatus === "unlocked" && stakeData?.childWallet && (
-                  <div className="mt-4 space-y-3 p-4 bg-slate-800/50 rounded-xl border border-emerald-500/20">
-                    <p className="text-sm text-slate-300">
-                      Choose how to use your staked amount + rewards:
-                    </p>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">
-                        Withdraw to address (leave empty for connected wallet)
-                      </label>
-                      <input
-                        type="text"
-                        value={withdrawDestination}
-                        onChange={(e) => setWithdrawDestination(e.target.value)}
-                        placeholder={publicKey?.toBase58() ?? "Wallet address"}
-                        className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                        disabled={withdrawLoading || restakeLoading}
-                      />
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                      <button
-                        onClick={async () => {
-                          if (!publicKey || !stakeData) return;
-                          setError("");
-                          setSuccess("");
-                          setWithdrawLoading(true);
-                          try {
-                            const result = await withdrawStake(
-                              stakeData.id,
-                              publicKey.toBase58(),
-                              withdrawDestination.trim() || undefined
-                            );
-                            setSuccess(
-                              `Withdrawn ${(Number(result.amount) / 1_000_000).toFixed(2)} UST + ${(Number(result.totalReward) / 1_000_000).toFixed(2)} rewards. Tx: ${result.txSignature}`
-                            );
-                            await refreshData();
-                          } catch (e) {
-                            setError((e as Error).message ?? "Withdraw failed");
-                          } finally {
-                            setWithdrawLoading(false);
-                          }
-                        }}
-                        disabled={withdrawLoading || restakeLoading}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-sm disabled:opacity-50 disabled:pointer-events-none"
+                        key={s.id}
+                        className="p-4 rounded-xl border border-emerald-500/15 bg-slate-900/60 space-y-3"
                       >
-                        {withdrawLoading ? "Withdrawing…" : "Withdraw"}
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!publicKey || !stakeData) return;
-                          setError("");
-                          setSuccess("");
-                          setRestakeLoading(true);
-                          try {
-                            const result = await restakeStake(
-                              stakeData.id,
-                              publicKey.toBase58()
-                            );
-                            setSuccess(
-                              `Restaked ${(Number(result.amount) / 1_000_000).toFixed(2)} UST at ${result.tierLabel} (${RESTAKE_DAILY_PCT}% daily) for 90 days.`
-                            );
-                            await refreshData();
-                          } catch (e) {
-                            setError((e as Error).message ?? "Restake failed");
-                          } finally {
-                            setRestakeLoading(false);
-                          }
-                        }}
-                        disabled={withdrawLoading || restakeLoading}
-                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm disabled:opacity-50 disabled:pointer-events-none"
-                      >
-                        {restakeLoading ? "Restaking…" : `Restake at ${RESTAKE_DAILY_PCT}%`}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">Staked</span>
+                          <span className="font-semibold">
+                            {formatUstRaw(s.amount)} UST
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">Rate</span>
+                          <span>{(s.tierBps / 100).toFixed(1)}% daily</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">
+                            Total Reward at Unlock
+                          </span>
+                          <span className="text-emerald-400">
+                            {formatUstRaw(s.totalReward)} UST
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-gradient-to-br from-emerald-950/40 to-indigo-950/40 rounded-xl border border-emerald-500/20 mt-1">
+                          <p className="text-[11px] text-slate-400 mb-1">
+                            Accrued So Far
+                          </p>
+                          <p className="text-xl font-bold text-emerald-400 glow-emerald">
+                            {formatUstRaw(stakeAccrued)} UST
+                          </p>
+                        </div>
+
+                        {s.status === "active" && s.amount > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-slate-400 mb-1">
+                              Progress to Unlock
+                            </p>
+                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500 rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    ((now - s.startTime) /
+                                      (86400 * LOCK_DAYS)) *
+                                      100
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">Unlock In</span>
+                          <span
+                            className={
+                              daysRemaining === 0
+                                ? "text-emerald-400"
+                                : "text-amber-400"
+                            }
+                          >
+                            {daysRemaining === 0
+                              ? "Unlocked!"
+                              : `${daysRemaining} days`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">Unlock Date</span>
+                          <span>
+                            {new Date(s.unlockTime * 1000).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">Status</span>
+                          <span
+                            className={
+                              s.status === "claimed"
+                                ? "text-slate-500"
+                                : "text-emerald-400"
+                            }
+                          >
+                            {s.status === "active"
+                              ? "Locked"
+                              : s.status === "unlocked"
+                              ? "Unlocked — choose Withdraw or Restake"
+                              : "Claimed"}
+                          </span>
+                        </div>
+
+                        {s.childWallet && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Child Wallet</span>
+                            <a
+                              href={`https://explorer.solana.com/address/${s.childWallet}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-400 hover:underline font-mono text-xs"
+                            >
+                              {s.childWallet.slice(0, 6)}...
+                              {s.childWallet.slice(-4)}
+                            </a>
+                          </div>
+                        )}
+
+                        {daysRemaining === 0 && s.status === "active" && (
+                          <p className="text-sm text-emerald-300 mt-2 bg-emerald-950/30 px-3 py-2 rounded-lg">
+                            When unlocked, you can withdraw to your wallet or
+                            restake at {RESTAKE_DAILY_PCT}% for another 90 days.
+                          </p>
+                        )}
+
+                        {isUnlocked && s.childWallet && (
+                          <div className="mt-4 space-y-3 p-4 bg-slate-800/50 rounded-xl border border-emerald-500/20">
+                            <p className="text-sm text-slate-300">
+                              Choose how to use your staked amount + rewards:
+                            </p>
+                            <div>
+                              <label className="block text-xs text-slate-400 mb-1">
+                                Withdraw to address (leave empty for connected
+                                wallet)
+                              </label>
+                              <input
+                                type="text"
+                                value={withdrawDestination}
+                                onChange={(e) =>
+                                  setWithdrawDestination(e.target.value)
+                                }
+                                placeholder={
+                                  publicKey?.toBase58() ?? "Wallet address"
+                                }
+                                className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded-lg text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                                disabled={withdrawLoading || restakeLoading}
+                              />
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={async () => {
+                                  if (!publicKey) return;
+                                  setError("");
+                                  setSuccess("");
+                                  setWithdrawLoading(true);
+                                  try {
+                                    const result = await withdrawStake(
+                                      s.id,
+                                      publicKey.toBase58(),
+                                      withdrawDestination.trim() || undefined
+                                    );
+                                    setSuccess(
+                                      `Withdrawn ${(Number(result.amount) / 1_000_000).toFixed(
+                                        2
+                                      )} UST + ${(Number(result.totalReward) / 1_000_000).toFixed(
+                                        2
+                                      )} rewards. Tx: ${result.txSignature}`
+                                    );
+                                    await refreshData();
+                                  } catch (e) {
+                                    setError(
+                                      (e as Error).message ?? "Withdraw failed"
+                                    );
+                                  } finally {
+                                    setWithdrawLoading(false);
+                                  }
+                                }}
+                                disabled={withdrawLoading || restakeLoading}
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-sm disabled:opacity-50 disabled:pointer-events-none"
+                              >
+                                {withdrawLoading
+                                  ? "Withdrawing…"
+                                  : "Withdraw"}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!publicKey) return;
+                                  setError("");
+                                  setSuccess("");
+                                  setRestakeLoading(true);
+                                  try {
+                                    const result = await restakeStake(
+                                      s.id,
+                                      publicKey.toBase58()
+                                    );
+                                    setSuccess(
+                                      `Restaked ${(Number(result.amount) / 1_000_000).toFixed(
+                                        2
+                                      )} UST at ${result.tierLabel} (${RESTAKE_DAILY_PCT}% daily) for 90 days.`
+                                    );
+                                    await refreshData();
+                                  } catch (e) {
+                                    setError(
+                                      (e as Error).message ?? "Restake failed"
+                                    );
+                                  } finally {
+                                    setRestakeLoading(false);
+                                  }
+                                }}
+                                disabled={withdrawLoading || restakeLoading}
+                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm disabled:opacity-50 disabled:pointer-events-none"
+                              >
+                                {restakeLoading
+                                  ? "Restaking…"
+                                  : `Restake at ${RESTAKE_DAILY_PCT}%`}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          {connected && stakeData && stakeStatus === "active" && (
+          {connected && anyActiveStake && (
             <EmailSubscribe wallet={publicKey?.toBase58() || ""} />
           )}
         </div>

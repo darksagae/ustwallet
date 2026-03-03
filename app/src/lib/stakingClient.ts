@@ -204,33 +204,50 @@ export async function claimReferral(
 
 export async function fetchStakeFromApi(
   wallet: string
-): Promise<{ stake: StakeInfo | null; pool: PoolInfo | null }> {
+): Promise<{ stakes: StakeInfo[]; pool: PoolInfo | null }> {
   const res = await fetch(`/api/stake/${wallet}`);
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error || "Failed to fetch stake");
   }
-  const s = data.stake;
+  const rawStakes = (data.stakes ??
+    (data.stake ? [data.stake] : [])) as
+    | {
+        id: string;
+        wallet: string;
+        amount: string | number;
+        tierBps: number;
+        tierLabel: string;
+        startTime: number;
+        unlockTime: number;
+        totalReward: string | number;
+        rewardDistributed: string | number;
+        accrued: number;
+        status: string;
+        childWallet: string | null;
+        depositTxSig: string;
+        claimTxSig: string | null;
+      }[]
+    | undefined;
   const p = data.pool;
   return {
-    stake: s
-      ? {
-          id: s.id,
-          wallet: s.wallet,
-          amount: Number(s.amount),
-          tierBps: s.tierBps,
-          tierLabel: s.tierLabel,
-          startTime: s.startTime,
-          unlockTime: s.unlockTime,
-          totalReward: Number(s.totalReward),
-          rewardDistributed: Number(s.rewardDistributed),
-          accrued: s.accrued,
-          status: s.status,
-          childWallet: s.childWallet,
-          depositTxSig: s.depositTxSig,
-          claimTxSig: s.claimTxSig,
-        }
-      : null,
+    stakes:
+      rawStakes?.map((s) => ({
+        id: s.id,
+        wallet: s.wallet,
+        amount: Number(s.amount),
+        tierBps: s.tierBps,
+        tierLabel: s.tierLabel,
+        startTime: s.startTime,
+        unlockTime: s.unlockTime,
+        totalReward: Number(s.totalReward),
+        rewardDistributed: Number(s.rewardDistributed),
+        accrued: s.accrued,
+        status: s.status,
+        childWallet: s.childWallet,
+        depositTxSig: s.depositTxSig,
+        claimTxSig: s.claimTxSig,
+      })) ?? [],
     pool: p
       ? {
           totalStaked: Number(p.totalStaked),

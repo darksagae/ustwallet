@@ -12,30 +12,26 @@ export async function GET(
     return NextResponse.json({ error: "wallet is required" }, { status: 400 });
   }
 
-  const stake = await prisma.stake.findFirst({
+  const stakes = await prisma.stake.findMany({
     where: { wallet, status: { in: ["active", "unlocked"] } },
     include: { childWallet: { select: { publicKey: true } } },
     orderBy: { createdAt: "desc" },
   });
 
-  if (!stake) {
-    return NextResponse.json({ stake: null });
+  if (!stakes.length) {
+    return NextResponse.json({ stakes: [], pool: null });
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const accrued = computeAccruedReward(
-    Number(stake.amount),
-    stake.tierBps,
-    stake.startTime,
-    now
-  );
 
-  const pool = await prisma.poolStats.findUnique({
-    where: { id: "singleton" },
-  });
-
-  return NextResponse.json({
-    stake: {
+  const stakesWithAccrued = stakes.map((stake) => {
+    const accrued = computeAccruedReward(
+      Number(stake.amount),
+      stake.tierBps,
+      stake.startTime,
+      now
+    );
+    return {
       id: stake.id,
       wallet: stake.wallet,
       amount: stake.amount.toString(),
@@ -50,7 +46,15 @@ export async function GET(
       childWallet: stake.childWallet?.publicKey || null,
       depositTxSig: stake.depositTxSig,
       claimTxSig: stake.claimTxSig,
-    },
+    };
+  });
+
+  const pool = await prisma.poolStats.findUnique({
+    where: { id: "singleton" },
+  });
+
+  return NextResponse.json({
+    stakes: stakesWithAccrued,
     pool: pool
       ? {
           totalStaked: pool.totalStaked.toString(),
