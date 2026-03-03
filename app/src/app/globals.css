@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --background: #020617;
+  --foreground: #e2e8f0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(34, 211, 238, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(34, 211, 238, 0.5); }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.glow-emerald {
+  text-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+}
+
+.glow-card {
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.12);
+}
+
+/* Wallet adapter button overrides - green theme */
+.wallet-adapter-button {
+  background: linear-gradient(135deg, #16a34a, #22c55e) !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+  height: 48px !important;
+  padding: 0 28px !important;
+  font-size: 16px !important;
+  transition: all 0.2s !important;
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.35) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+/* Ensure "Select Wallet" / label text is visible (adapter can render icon + text) */
+.wallet-adapter-button .wallet-adapter-button-start-icon {
+  margin-right: 4px;
+}
+.wallet-adapter-button span:not(.wallet-adapter-button-start-icon) {
+  visibility: visible !important;
+  display: inline-block !important;
+}
+
+.wallet-adapter-button:hover {
+  background: linear-gradient(135deg, #22c55e, #4ade80) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 24px rgba(34, 197, 94, 0.45) !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: #0f172a !important;
+  border: 1px solid rgba(34, 197, 94, 0.2) !important;
+  border-radius: 16px !important;
+}
+
+.wallet-adapter-modal-title {
+  color: #86efac !important;
+}

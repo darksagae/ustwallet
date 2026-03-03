@@ -1,0 +1,27 @@
+---
+description: Require debugging checks after code changes
+alwaysApply: true
+---
+
+# Post-Run Debug Check
+
+After completing code changes, always run a debug/verification pass before marking work done.
+
+## Required workflow
+
+1. Run the most relevant check for the changed area (for example: app run, tests, linter, or typecheck).
+2. If any error appears, investigate root cause and fix it.
+3. Re-run the same check until it passes cleanly.
+4. Only finalize when there are no unresolved errors from that check.
+
+## Expected behavior
+
+- Treat warnings that can become runtime failures as issues to fix.
+- If a required check cannot be run locally, clearly state why and provide exact manual verification steps.
+
+## Example
+
+```bash
+npm run lint
+npm run test
+```

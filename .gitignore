@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Env and secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.DS_Store
+*.log
+
+# Vercel
+.vercel
+
+# Anchor local test ledger
+.anchor

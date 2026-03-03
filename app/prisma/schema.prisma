@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserNotification {
+  id               String    @id @default(cuid())
+  wallet           String    @unique
+  email            String
+  subscribed       Boolean   @default(true)
+  unsubscribeToken String?   @unique
+  firstStakeSeenAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastSentAt       DateTime?
+
+  logs NotificationLog[]
+}
+
+model CreatorAlert {
+  id         String   @id @default(cuid())
+  threshold  Int
+  triggeredAt DateTime @default(now())
+}
+
+model NotificationLog {
+  id            String   @id @default(cuid())
+  wallet        String
+  hourBucket    DateTime
+  accruedReward String
+  principal     String
+  tierBps       Int
+  status        String   @default("sent")
+  providerId    String?
+  createdAt     DateTime @default(now())
+
+  user UserNotification @relation(fields: [wallet], references: [wallet])
+
+  @@unique([wallet, hourBucket])
+}
+
+model Stake {
+  id                String       @id @default(cuid())
+  wallet            String
+  amount            BigInt
+  tierBps           Int
+  tierLabel         String
+  startTime         Int
+  unlockTime        Int
+  totalReward       BigInt
+  rewardDistributed BigInt       @default(0)
+  status            String       @default("active") // active | unlocked | claimed
+  depositTxSig      String       @unique
+  claimTxSig        String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  childWallet ChildWallet?
+
+  @@index([wallet])
+  @@index([status])
+}
+
+model ChildWallet {
+  id                 String   @id @default(cuid())
+  stakeId            String   @unique
+  publicKey          String   @unique
+  encryptedSecretKey String
+  iv                 String
+  authTag            String
+  createdAt          DateTime @default(now())
+
+  stake Stake @relation(fields: [stakeId], references: [id])
+}
+
+model PoolStats {
+  id                  String   @id @default("singleton")
+  totalStaked         BigInt   @default(0)
+  capTotalStaked      BigInt   @default(5000000)
+  rewardPoolMax       BigInt   @default(0)
+  rewardPoolReserved  BigInt   @default(0)
+  updatedAt           DateTime @updatedAt
+}
+
+model Referral {
+  id        String   @id @default(cuid())
+  referrer  String
+  referred  String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([referrer])
+}
+
+model ReferralBalance {
+  id          String   @id @default(cuid())
+  wallet      String   @unique
+  balance     BigInt   @default(0)
+  totalEarned BigInt   @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@index([wallet])
+}
+
+model ReferralAccrual {
+  id            String   @id @default(cuid())
+  wallet        String
+  amount        BigInt
+  level         Int
+  sourceStakeId String
+  sourceWallet  String
+  createdAt     DateTime @default(now())
+
+  @@index([wallet])
+  @@index([sourceStakeId])
+}

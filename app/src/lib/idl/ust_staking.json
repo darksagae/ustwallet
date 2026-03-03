@@ -1,0 +1,139 @@
+{
+  "address": "9ZcVkMmP4DGsgJZuN6GSUVNhyacvzQwFh1M8kAq15Cie",
+  "metadata": {
+    "name": "ust_staking",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "initialize_pool",
+      "discriminator": [95, 180, 10, 172, 84, 174, 232, 40],
+      "accounts": [
+        { "name": "global_pool", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [103,108,111,98,97,108,95,112,111,111,108] }, { "kind": "account", "path": "mint" }] } },
+        { "name": "vault", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [118,97,117,108,116] }, { "kind": "account", "path": "global_pool" }] } },
+        { "name": "mint" },
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" },
+        { "name": "token_program", "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+        { "name": "rent", "address": "SysvarRent111111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "cap_total_staked", "type": "u64" }
+      ]
+    },
+    {
+      "name": "fund_reward_pool",
+      "discriminator": [85, 49, 108, 245, 204, 70, 243, 3],
+      "accounts": [
+        { "name": "global_pool", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "funder_ata", "writable": true },
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "token_program", "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "stake",
+      "discriminator": [206, 176, 202, 18, 200, 209, 179, 108],
+      "accounts": [
+        { "name": "global_pool", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "user_stake", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [117,115,101,114,95,115,116,97,107,101] }, { "kind": "account", "path": "global_pool" }, { "kind": "account", "path": "user" }] } },
+        { "name": "user_ata", "writable": true },
+        { "name": "user", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" },
+        { "name": "token_program", "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "unstake_and_claim",
+      "discriminator": [46, 141, 208, 113, 11, 67, 229, 75],
+      "accounts": [
+        { "name": "global_pool", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "user_stake", "writable": true },
+        { "name": "user_ata", "writable": true },
+        { "name": "user", "writable": true, "signer": true },
+        { "name": "token_program", "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_pause",
+      "discriminator": [63, 32, 154, 2, 56, 103, 79, 45],
+      "accounts": [
+        { "name": "global_pool", "writable": true },
+        { "name": "authority", "writable": true, "signer": true }
+      ],
+      "args": [
+        { "name": "paused", "type": "bool" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GlobalPool",
+      "discriminator": [162, 244, 124, 37, 148, 94, 28, 50]
+    },
+    {
+      "name": "UserStakeAccount",
+      "discriminator": [167, 87, 153, 81, 129, 95, 15, 213]
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "InvalidAmount", "msg": "Invalid staking amount" },
+    { "code": 6001, "name": "CampaignClosed", "msg": "Campaign is closed" },
+    { "code": 6002, "name": "InsufficientRewardPool", "msg": "Insufficient reward pool to cover liability" },
+    { "code": 6003, "name": "PrematureUnstake", "msg": "Cannot unstake before unlock time" },
+    { "code": 6004, "name": "AlreadyClaimed", "msg": "Rewards already claimed" },
+    { "code": 6005, "name": "Overflow", "msg": "Arithmetic overflow" },
+    { "code": 6006, "name": "Paused", "msg": "Pool is paused" },
+    { "code": 6007, "name": "Unauthorized", "msg": "Unauthorized" },
+    { "code": 6008, "name": "CapExceeded", "msg": "Total staking cap exceeded" }
+  ],
+  "types": [
+    {
+      "name": "GlobalPool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "pubkey" },
+          { "name": "mint", "type": "pubkey" },
+          { "name": "vault", "type": "pubkey" },
+          { "name": "start_time", "type": "i64" },
+          { "name": "end_time", "type": "i64" },
+          { "name": "total_staked", "type": "u64" },
+          { "name": "reward_pool_max", "type": "u64" },
+          { "name": "reward_pool_reserved", "type": "u64" },
+          { "name": "cap_total_staked", "type": "u64" },
+          { "name": "paused", "type": "bool" },
+          { "name": "bump", "type": "u8" },
+          { "name": "vault_bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "UserStakeAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "pubkey" },
+          { "name": "amount_staked", "type": "u64" },
+          { "name": "start_time", "type": "i64" },
+          { "name": "unlock_time", "type": "i64" },
+          { "name": "claimed", "type": "bool" },
+          { "name": "tier_bps", "type": "u16" },
+          { "name": "pending_reward", "type": "u64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ]
+}
