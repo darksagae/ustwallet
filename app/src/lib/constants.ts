@@ -58,6 +58,15 @@ export const REFERRAL_MIN_CLAIM_USD = Number(
 export const RAYDIUM_SOL_UST_POOL_ID =
   process.env.NEXT_PUBLIC_RAYDIUM_SOL_UST_POOL_ID || "";
 
+/** WalletConnect Cloud project ID (https://cloud.walletconnect.com). Required for WalletConnect adapter. */
+export const WALLETCONNECT_PROJECT_ID =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
+
+/** App URL for WalletConnect metadata (e.g. https://ust-wallet.com). */
+export const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "https://ust-wallet.com");
+
 export function computeAccruedReward(
   amount: number,
   dailyBps: number,
