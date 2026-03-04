@@ -218,18 +218,29 @@ export default function StakingDashboard() {
     conn: Connection,
     tx: Transaction
   ): Promise<string> => {
-    const { blockhash } = await conn.getLatestBlockhash("confirmed");
+    const { blockhash, lastValidBlockHeight } =
+      await conn.getLatestBlockhash("confirmed");
     tx.recentBlockhash = blockhash;
+    let signature: string;
     if (sendTransaction) {
-      return sendTransaction(tx, conn, { skipPreflight: false });
-    }
-    if (signTransaction) {
-      const signed = await signTransaction(tx);
-      return conn.sendRawTransaction(signed.serialize(), {
+      signature = await sendTransaction(tx, conn, {
         skipPreflight: false,
+        maxRetries: 3,
       });
+    } else if (signTransaction) {
+      const signed = await signTransaction(tx);
+      signature = await conn.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        maxRetries: 3,
+      });
+    } else {
+      throw new Error("Wallet does not support sending transactions");
     }
-    throw new Error("Wallet does not support sending transactions");
+    await conn.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed"
+    );
+    return signature;
   };
 
   const handleStake = async () => {
@@ -275,7 +286,6 @@ export default function StakingDashboard() {
           throw sendErr;
         }
       }
-      await conn.confirmTransaction(signature, "confirmed");
 
       const stakeResult = await registerStake(
         publicKey.toBase58(),
@@ -347,8 +357,6 @@ export default function StakingDashboard() {
         }
       }
       console.log("[Stake-SOL] Tx sent:", signature);
-      await conn.confirmTransaction(signature, "confirmed");
-      console.log("[Stake-SOL] Tx confirmed on-chain");
 
       console.log("[Stake-SOL] Calling /api/stake-sol to register stake...");
       const stakeResult = await registerStakeFromSol(
