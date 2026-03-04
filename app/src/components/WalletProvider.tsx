@@ -63,12 +63,10 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const wallets = useMemo((): WalletAdapter[] => {
-    const baseUrl =
-      typeof window !== "undefined" ? window.location.origin : APP_URL;
     const list: WalletAdapter[] = [];
-    // WalletConnect first so the app works in Phantom's in-app browser (mobile);
-    // the standard mobile/extension adapter does not open properly there.
     if (WALLETCONNECT_PROJECT_ID) {
+      const baseUrl =
+        typeof window !== "undefined" ? window.location.origin : APP_URL;
       list.push(
         new WalletConnectWalletAdapter({
           network: SOLANA_NETWORK,
