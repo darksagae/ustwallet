@@ -13,6 +13,14 @@ const BaseWalletMultiButton = dynamic(
     ),
   { ssr: false }
 );
+
+const WalletModalButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletModalButton
+    ),
+  { ssr: false }
+);
 import {
   LOCK_DAYS,
   DAILY_BPS,
@@ -87,7 +95,8 @@ function CountUp({ value, suffix = "" }: { value: number; suffix?: string }) {
 }
 
 export default function StakingDashboard() {
-  const { publicKey, sendTransaction, signTransaction, connected } = useWallet();
+  const { publicKey, sendTransaction, signTransaction, connected, connecting } =
+    useWallet();
   const { connection } = useConnection();
   const searchParams = useSearchParams();
 
@@ -415,17 +424,25 @@ export default function StakingDashboard() {
             <p className="text-xs text-slate-500">Season 1 Lock Event</p>
           </div>
         </div>
-        <BaseWalletMultiButton
-          labels={{
-            "has-wallet": "Select Wallet",
-            "no-wallet": "Select Wallet",
-            connecting: "Connecting ...",
-            "copy-address": "Copy address",
-            copied: "Copied",
-            "change-wallet": "Change wallet",
-            disconnect: "Disconnect",
-          }}
-        />
+        {connected ? (
+          <BaseWalletMultiButton
+            labels={{
+              "has-wallet": "Select Wallet",
+              "no-wallet": "Select Wallet",
+              connecting: "Connecting ...",
+              "copy-address": "Copy address",
+              copied: "Copied",
+              "change-wallet": "Change wallet",
+              disconnect: "Disconnect",
+            }}
+          />
+        ) : connecting ? (
+          <button className="wallet-adapter-button wallet-adapter-button-trigger" disabled>
+            Connecting ...
+          </button>
+        ) : (
+          <WalletModalButton>Select Wallet</WalletModalButton>
+        )}
       </header>
 
       {/* Hero */}
@@ -480,17 +497,25 @@ export default function StakingDashboard() {
         </p>
         <div className="flex justify-center mb-12">
           <div className="[&_button]:!h-14 [&_button]:!px-10 [&_button]:!text-lg">
-            <BaseWalletMultiButton
-              labels={{
-                "has-wallet": "Select Wallet",
-                "no-wallet": "Select Wallet",
-                connecting: "Connecting ...",
-                "copy-address": "Copy address",
-                copied: "Copied",
-                "change-wallet": "Change wallet",
-                disconnect: "Disconnect",
-              }}
-            />
+            {connected ? (
+              <BaseWalletMultiButton
+                labels={{
+                  "has-wallet": "Select Wallet",
+                  "no-wallet": "Select Wallet",
+                  connecting: "Connecting ...",
+                  "copy-address": "Copy address",
+                  copied: "Copied",
+                  "change-wallet": "Change wallet",
+                  disconnect: "Disconnect",
+                }}
+              />
+            ) : connecting ? (
+              <button className="wallet-adapter-button wallet-adapter-button-trigger" disabled>
+                Connecting ...
+              </button>
+            ) : (
+              <WalletModalButton>Select Wallet</WalletModalButton>
+            )}
           </div>
         </div>
 
