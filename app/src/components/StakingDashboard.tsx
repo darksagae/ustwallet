@@ -87,7 +87,7 @@ function CountUp({ value, suffix = "" }: { value: number; suffix?: string }) {
 }
 
 export default function StakingDashboard() {
-  const { publicKey, signTransaction, connected } = useWallet();
+  const { publicKey, sendTransaction, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
   const searchParams = useSearchParams();
 
@@ -128,6 +128,16 @@ export default function StakingDashboard() {
         : "";
     if (isRpcForbidden(err)) {
       return "RPC access forbidden. Set NEXT_PUBLIC_SOLANA_RPC_URL in .env to a dedicated RPC (e.g. Helius or QuickNode free tier).";
+    }
+    if (
+      /signature\s*verification\s*failed|missing\s*signature\s*for\s*public\s*key/i.test(
+        msg
+      ) ||
+      /signature\s*verification\s*failed|missing\s*signature\s*for\s*public\s*key/i.test(
+        details
+      )
+    ) {
+      return "Your wallet did not sign the transaction (often on mobile or when the wallet blocks the request). Try: (1) Use WalletConnect and approve in your mobile wallet, or (2) Approve the transaction when the wallet prompts you, or (3) Use a different browser/device.";
     }
     return details ? `${msg}\n${details}` : msg || "Transaction failed";
   }
@@ -236,23 +246,29 @@ export default function StakingDashboard() {
   const meetsMin = parsedAmount >= minUst;
   const projectedReward = meetsMin ? computeReward(parsedAmount, DAILY_BPS) : 0;
 
+  /** Prefer wallet sendTransaction (sign + send) to avoid "signature verification failed" when wallet blocks sign-only. */
   const sendAndConfirm = async (
     conn: Connection,
-    tx: Transaction,
-    sign: NonNullable<typeof signTransaction>
+    tx: Transaction
   ): Promise<string> => {
     const { blockhash } = await conn.getLatestBlockhash("confirmed");
     tx.recentBlockhash = blockhash;
-    const signed = await sign(tx);
-    return conn.sendRawTransaction(signed.serialize(), {
-      skipPreflight: false,
-    });
+    if (sendTransaction) {
+      return sendTransaction(tx, conn, { skipPreflight: false });
+    }
+    if (signTransaction) {
+      const signed = await signTransaction(tx);
+      return conn.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+      });
+    }
+    throw new Error("Wallet does not support sending transactions");
   };
 
   const handleStake = async () => {
     setError("");
     setSuccess("");
-    if (!publicKey || !signTransaction) {
+    if (!publicKey || (!sendTransaction && !signTransaction)) {
       setError("Connect your wallet first");
       return;
     }
@@ -272,12 +288,12 @@ export default function StakingDashboard() {
       let signature: string;
       let conn: Connection = connection;
       try {
-        signature = await sendAndConfirm(conn, tx, signTransaction!);
+        signature = await sendAndConfirm(conn, tx);
       } catch (sendErr: unknown) {
         const msg = (sendErr as Error).message ?? "";
         if (isRpcForbidden(sendErr) && RPC_FALLBACK_URL) {
           conn = new Connection(RPC_FALLBACK_URL, "confirmed");
-          signature = await sendAndConfirm(conn, tx, signTransaction!);
+          signature = await sendAndConfirm(conn, tx);
         } else if (
           msg.includes("Blockhash not found") ||
           msg.includes("blockhash not found")
@@ -287,7 +303,7 @@ export default function StakingDashboard() {
             publicKey,
             parsedAmount
           );
-          signature = await sendAndConfirm(conn, txRetry, signTransaction!);
+          signature = await sendAndConfirm(conn, txRetry);
         } else {
           throw sendErr;
         }
@@ -315,7 +331,7 @@ export default function StakingDashboard() {
   const handleStakeWithSol = async () => {
     setError("");
     setSuccess("");
-    if (!publicKey || !signTransaction) {
+    if (!publicKey || (!sendTransaction && !signTransaction)) {
       setError("Connect your wallet first");
       return;
     }
@@ -332,20 +348,20 @@ export default function StakingDashboard() {
       let signature: string;
       let conn: Connection = connection;
       try {
-        signature = await sendAndConfirm(conn, tx, signTransaction!);
+        signature = await sendAndConfirm(conn, tx);
       } catch (sendErr: unknown) {
         const msg = (sendErr as Error).message ?? "";
         if (isRpcForbidden(sendErr) && RPC_FALLBACK_URL) {
           console.log("[Stake-SOL] Primary RPC failed, retrying with fallback...");
           conn = new Connection(RPC_FALLBACK_URL, "confirmed");
-          signature = await sendAndConfirm(conn, tx, signTransaction!);
+          signature = await sendAndConfirm(conn, tx);
         } else if (
           msg.includes("Blockhash not found") ||
           msg.includes("blockhash not found")
         ) {
           console.log("[Stake-SOL] Blockhash expired, retrying with fresh blockhash...");
           tx = buildSolTransferTx(publicKey, sol);
-          signature = await sendAndConfirm(conn, tx, signTransaction!);
+          signature = await sendAndConfirm(conn, tx);
         } else {
           throw sendErr;
         }
