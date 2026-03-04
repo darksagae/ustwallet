@@ -45,10 +45,11 @@ export function computeReward(amount: number, dailyBps: number): number {
   return (amount * dailyBps * LOCK_DAYS) / 10_000;
 }
 
+/** L1 20%, L2 10%, L3 5% of referred user's staking rewards (paid hourly with their accrual). */
 export const REFERRAL_LEVELS = [
-  { level: 1, bps: 20 },
-  { level: 2, bps: 10 },
-  { level: 3, bps: 5 },
+  { level: 1, bps: 2000 },
+  { level: 2, bps: 1000 },
+  { level: 3, bps: 500 },
 ] as const;
 
 export const REFERRAL_MIN_CLAIM_USD = Number(

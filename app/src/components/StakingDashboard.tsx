@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { Connection, type Transaction } from "@solana/web3.js";
@@ -29,6 +30,7 @@ import {
   MIN_STAKE_UST_FALLBACK,
   RPC_FALLBACK_URL,
   RESTAKE_DAILY_PCT,
+  APP_URL,
   computeReward,
   computeAccruedReward,
 } from "@/lib/constants";
@@ -117,8 +119,9 @@ export default function StakingDashboard() {
   const [copied, setCopied] = useState(false);
   const [minUst, setMinUst] = useState(MIN_STAKE_UST_FALLBACK);
   const [minUsd, setMinUsd] = useState(MIN_STAKE_USD);
+  const [manualReferrer, setManualReferrer] = useState("");
 
-  const referrer = searchParams.get("ref") || undefined;
+  const referrer = searchParams.get("ref") || manualReferrer.trim() || undefined;
 
   function isRpcForbidden(err: unknown): boolean {
     const msg = (err as Error).message ?? "";
@@ -485,6 +488,15 @@ export default function StakingDashboard() {
             />
           </svg>
         </div>
+        <div className="flex justify-center mb-4">
+          <Image
+            src="/tokenlogo.png"
+            alt="UST"
+            width={80}
+            height={80}
+            className="rounded-2xl"
+          />
+        </div>
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-3 relative">
           <span className="block text-white">90-Day UST Lock</span>
           <span className="block text-emerald-400 glow-emerald">
@@ -492,8 +504,7 @@ export default function StakingDashboard() {
           </span>
         </h1>
         <p className="text-slate-400 text-lg mb-8">
-          Limited Supply Lock Event — Only {CAP_DISPLAY.toLocaleString()} UST
-          Cap
+          Limited Supply Lock Event
         </p>
         <div className="flex justify-center mb-12">
           <div className="[&_button]:!h-14 [&_button]:!px-10 [&_button]:!text-lg">
@@ -519,27 +530,32 @@ export default function StakingDashboard() {
           </div>
         </div>
 
-        {/* Cap Progress */}
-        <div className="bg-slate-900/50 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-6 glow-card">
-          <p className="text-slate-400 text-sm mb-2">
-            {poolCap.toLocaleString()} UST Max
-          </p>
-          <div className="h-4 bg-slate-800 rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-700 rounded-full"
-              style={{ width: `${capPct}%` }}
-            />
+        {/* Cap Progress — shown after connecting; shows pool fill and your accrued progress */}
+        {connected && (
+          <div className="bg-slate-900/50 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-6 glow-card">
+            <p className="text-slate-400 text-sm mb-2">
+              {poolCap.toLocaleString()} UST Max
+            </p>
+            <div className="h-4 bg-slate-800 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-700 rounded-full"
+                style={{ width: `${capPct}%` }}
+              />
+            </div>
+            <p className="text-lg font-bold text-white">
+              {capPct === 0 ? (
+                <span className="text-slate-500">
+                  0% Filled — Be First To Lock
+                </span>
+              ) : (
+                <CountUp value={Math.round(capPct)} suffix="% Filled" />
+              )}
+            </p>
+            <p className="text-xs text-slate-500 mt-2">
+              Your accrued rewards below update every hour over the 90-day lock.
+            </p>
           </div>
-          <p className="text-lg font-bold text-white">
-            {capPct === 0 ? (
-              <span className="text-slate-500">
-                0% Filled — Be First To Lock
-              </span>
-            ) : (
-              <CountUp value={Math.round(capPct)} suffix="% Filled" />
-            )}
-          </p>
-        </div>
+        )}
 
         {/* Stats — values are raw (smallest units); display as UST with 2 decimals */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -552,7 +568,7 @@ export default function StakingDashboard() {
           />
           <StatCard
             icon={<IconCap className="w-8 h-8 text-emerald-400" />}
-            label="Staking Cap"
+            label="Event Cap"
             value={poolCap}
             suffix=" UST"
             formatAsUst
@@ -597,13 +613,29 @@ export default function StakingDashboard() {
                   : "bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700/60"
               }`}
             >
-              Stake with SOL
+              Stake UST using SOL
             </button>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm text-slate-400 mb-1">
+              Referral code (optional)
+            </label>
+            <input
+              type="text"
+              value={manualReferrer}
+              onChange={(e) => setManualReferrer(e.target.value)}
+              placeholder="Paste wallet address or code — applied when you stake"
+              className="w-full px-4 py-2 bg-slate-800/80 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
           </div>
 
           {payMode === "ust" ? (
             <>
               <h2 className="text-xl font-bold mb-6 text-white">Stake UST</h2>
+              <p className="text-slate-400 text-sm mb-4">
+                You need UST in your wallet. Enter amount to send from your wallet.
+              </p>
               <div className="mb-4">
                 <label className="block text-sm text-slate-400 mb-1">
                   Amount (UST)
@@ -652,7 +684,7 @@ export default function StakingDashboard() {
           ) : (
             <>
               <h2 className="text-xl font-bold mb-6 text-white">
-                Stake with SOL
+                Stake UST using SOL
               </h2>
               <div className="mb-4">
                 <label className="block text-sm text-slate-400 mb-1">
@@ -676,7 +708,7 @@ export default function StakingDashboard() {
                 }
                 className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5"
               >
-                {loading ? "Processing..." : "Stake with SOL"}
+                {loading ? "Processing..." : "Stake UST using SOL"}
               </button>
             </>
           )}
@@ -979,12 +1011,13 @@ export default function StakingDashboard() {
               Referral Program
             </h2>
             <p className="text-slate-400 text-sm mb-4">
-              Earn 0.2% (L1), 0.1% (L2), and 0.05% (L3) of your
-              referrals&apos; daily staking rewards. No lock-up — claim
-              anytime (min $10 USD).
+              Earn 20% of L1, 10% of L2, and 5% of L3 referrals&apos; staking
+              rewards. Paid hourly when they earn. No lock-up — claim anytime
+              (min $10 USD). Referrals count only when the referred user
+              successfully stakes.
             </p>
 
-            {/* Referral Link */}
+            {/* Referral Link — use app base URL so link works when shared */}
             <div className="mb-6">
               <label className="block text-sm text-slate-400 mb-1">
                 Your Referral Link
@@ -992,14 +1025,13 @@ export default function StakingDashboard() {
               <div className="flex gap-2">
                 <input
                   readOnly
-                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/?ref=${publicKey.toBase58()}`}
+                  value={`${typeof window !== "undefined" ? APP_URL : "https://ust-wallet.com"}/?ref=${publicKey.toBase58()}`}
                   className="flex-1 px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white font-mono text-xs focus:outline-none"
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(
-                      `${window.location.origin}/?ref=${publicKey.toBase58()}`
-                    );
+                    const link = `${typeof window !== "undefined" ? APP_URL : "https://ust-wallet.com"}/?ref=${publicKey.toBase58()}`;
+                    navigator.clipboard.writeText(link);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
