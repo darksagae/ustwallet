@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { prisma } from "@/lib/prisma";
 import { REFERRAL_MIN_CLAIM_USD } from "@/lib/constants";
-import { transferFromMainToUser } from "@/lib/custody";
 import { getUstPriceUsd } from "@/lib/price";
+import { sendReferralPayoutRequestedEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,19 +52,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Prevent duplicate pending requests for the same wallet
+    const existingRequest = await prisma.referralPayoutRequest.findFirst({
+      where: { wallet, status: "pending" },
+    });
+    if (existingRequest) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have a pending referral claim. Please wait for confirmation.",
+        },
+        { status: 400 }
+      );
+    }
+
     const claimAmount = balance.balance;
 
-    const txSig = await transferFromMainToUser(userPubkey, claimAmount);
+    // Create a pending payout request; admin will send tokens manually
+    const request = await prisma.referralPayoutRequest.create({
+      data: {
+        wallet,
+        amount: claimAmount,
+        status: "pending",
+      },
+    });
 
+    // Zero out balance to avoid double-claim; accounting is now in the request
     await prisma.referralBalance.update({
       where: { wallet },
       data: { balance: BigInt(0) },
     });
 
+    // Notify creator/admin if email is configured
+    const creatorEmail = process.env.CREATOR_EMAIL;
+    if (creatorEmail) {
+      await sendReferralPayoutRequestedEmail({
+        to: creatorEmail,
+        wallet,
+        amountTokens: balanceTokens.toFixed(6),
+        amountUsd: balanceUsd.toFixed(2),
+      });
+    }
+
     return NextResponse.json({
-      claimed: claimAmount.toString(),
-      claimedUsd: balanceUsd.toFixed(2),
-      txSignature: txSig,
+      status: "pending",
+      requestId: request.id,
+      requested: claimAmount.toString(),
+      requestedUsd: balanceUsd.toFixed(2),
+      message: "Claim requested. Waiting for confirmation.",
     });
   } catch (e: unknown) {
     console.error("Referral claim error:", e);

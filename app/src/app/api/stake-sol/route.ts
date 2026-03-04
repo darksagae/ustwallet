@@ -14,12 +14,7 @@ import {
   computeReward,
 } from "@/lib/constants";
 import { getSolPriceUsd, getUstPriceUsd } from "@/lib/price";
-import {
-  createChildWallet,
-  transferToChild,
-  getMainWalletPublicKey,
-  getConnection,
-} from "@/lib/custody";
+import { getMainWalletPublicKey, getConnection } from "@/lib/custody";
 import { swapSolToUst } from "@/lib/raydiumSwap";
 
 export async function POST(req: NextRequest) {
@@ -234,15 +229,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    let childPubkey: string | null = null;
-    try {
-      const child = await createChildWallet(stake.id);
-      childPubkey = child.publicKey.toBase58();
-      await transferToChild(child.publicKey, ustReceived);
-    } catch (e) {
-      console.error("Child wallet creation/transfer failed:", e);
-    }
-
     if (referrer && referrer !== wallet) {
       try {
         new PublicKey(referrer);
@@ -270,7 +256,6 @@ export async function POST(req: NextRequest) {
       startTime: stake.startTime,
       unlockTime: stake.unlockTime,
       totalReward: stake.totalReward.toString(),
-      childWallet: childPubkey,
       status: stake.status,
       swapTxId,
       solDeposited: (Number(solLamports) / LAMPORTS_PER_SOL).toFixed(4),

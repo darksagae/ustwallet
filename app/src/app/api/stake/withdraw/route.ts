@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { prisma } from "@/lib/prisma";
-import { transferFromChildToAddress } from "@/lib/custody";
+import { sendWithdrawalRequestedEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
 
     const stake = await prisma.stake.findUnique({
       where: { id: stakeId },
-      include: { childWallet: true },
     });
 
     if (!stake) {
@@ -42,13 +41,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!stake.childWallet) {
-      return NextResponse.json(
-        { error: "Stake has no child wallet" },
-        { status: 400 }
-      );
-    }
-
     const totalPayout =
       BigInt(stake.amount.toString()) + BigInt(stake.totalReward.toString());
     const destination = destinationWallet ?? stake.wallet;
@@ -63,23 +55,60 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const claimTxSig = await transferFromChildToAddress(
-      stake.childWallet.encryptedSecretKey,
-      stake.childWallet.iv,
-      stake.childWallet.authTag,
-      destinationPubkey,
-      totalPayout
-    );
+    // Prevent duplicate pending withdrawals for this stake
+    const existingRequest = await prisma.stakeWithdrawalRequest.findUnique({
+      where: { stakeId },
+    });
+    if (existingRequest && existingRequest.status === "pending") {
+      return NextResponse.json(
+        {
+          error:
+            "You already have a pending withdrawal request for this stake. Please wait for confirmation.",
+        },
+        { status: 400 }
+      );
+    }
 
-    await prisma.stake.update({
-      where: { id: stakeId },
-      data: { status: "claimed", claimTxSig },
+    const request = await prisma.stakeWithdrawalRequest.upsert({
+      where: { stakeId },
+      create: {
+        stakeId,
+        wallet,
+        destination,
+        amount: totalPayout,
+        status: "pending",
+      },
+      update: {
+        wallet,
+        destination,
+        amount: totalPayout,
+        status: "pending",
+      },
     });
 
+    // Optionally mark stake as withdraw_pending to avoid duplicate UX actions
+    await prisma.stake.update({
+      where: { id: stakeId },
+      data: { status: "withdraw_pending" },
+    });
+
+    // Notify creator/admin if email configured
+    const creatorEmail = process.env.CREATOR_EMAIL;
+    if (creatorEmail) {
+      await sendWithdrawalRequestedEmail({
+        to: creatorEmail,
+        wallet,
+        destination,
+        amountTokens: (Number(totalPayout) / 1_000_000).toFixed(6),
+        stakeId,
+      });
+    }
+
     return NextResponse.json({
-      txSignature: claimTxSig,
-      amount: stake.amount.toString(),
-      totalReward: stake.totalReward.toString(),
+      status: "pending",
+      requestId: request.id,
+      amount: totalPayout.toString(),
+      message: "Withdrawal requested. Waiting for confirmation.",
     });
   } catch (e: unknown) {
     console.error("[stake/withdraw] Error:", e);

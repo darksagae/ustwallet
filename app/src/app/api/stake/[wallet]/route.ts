@@ -13,7 +13,7 @@ export async function GET(
   }
 
   const stakes = await prisma.stake.findMany({
-    where: { wallet, status: { in: ["active", "unlocked"] } },
+    where: { wallet, status: { in: ["active", "unlocked", "withdraw_pending"] } },
     include: { childWallet: { select: { publicKey: true } } },
     orderBy: { createdAt: "desc" },
   });

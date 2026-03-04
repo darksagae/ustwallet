@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PublicKey } from "@solana/web3.js";
 import { prisma } from "@/lib/prisma";
-import { transferToChild } from "@/lib/custody";
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -17,7 +15,6 @@ export async function POST(req: NextRequest) {
       status: "active",
       unlockTime: { lte: now },
     },
-    include: { childWallet: true },
   });
 
   if (readyStakes.length === 0) {
@@ -29,19 +26,10 @@ export async function POST(req: NextRequest) {
 
   for (const stake of readyStakes) {
     try {
-      if (!stake.childWallet) continue;
-
-      const totalReward = BigInt(stake.totalReward.toString());
-      const childPubkey = new PublicKey(stake.childWallet.publicKey);
-
-      // Move rewards from custody to child so child holds principal + rewards; user chooses Withdraw or Restake later
-      await transferToChild(childPubkey, totalReward);
-
       await prisma.stake.update({
         where: { id: stake.id },
         data: { status: "unlocked" },
       });
-
       processed++;
     } catch (e: unknown) {
       const msg = `${stake.wallet}: ${(e as Error).message}`;

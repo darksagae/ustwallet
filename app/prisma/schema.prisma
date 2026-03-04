@@ -53,13 +53,31 @@ model Stake {
   unlockTime        Int
   totalReward       BigInt
   rewardDistributed BigInt       @default(0)
-  status            String       @default("active") // active | unlocked | claimed
+  status            String       @default("active") // active | unlocked | withdraw_pending | claimed
   depositTxSig      String       @unique
   claimTxSig        String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  childWallet ChildWallet?
+  childWallet        ChildWallet?
+  withdrawalRequest  StakeWithdrawalRequest?
+
+  @@index([wallet])
+  @@index([status])
+}
+
+model StakeWithdrawalRequest {
+  id          String   @id @default(cuid())
+  stakeId     String   @unique
+  wallet      String
+  destination String
+  amount      BigInt
+  status      String   @default("pending") // pending | approved | rejected
+  txSignature String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stake Stake @relation(fields: [stakeId], references: [id])
 
   @@index([wallet])
   @@index([status])
@@ -116,4 +134,17 @@ model ReferralAccrual {
 
   @@index([wallet])
   @@index([sourceStakeId])
+}
+
+model ReferralPayoutRequest {
+  id          String   @id @default(cuid())
+  wallet      String
+  amount      BigInt
+  status      String   @default("pending") // pending | approved | rejected
+  txSignature String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([wallet])
+  @@index([status])
 }

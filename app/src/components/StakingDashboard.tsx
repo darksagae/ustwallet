@@ -119,6 +119,8 @@ export default function StakingDashboard() {
   const [copied, setCopied] = useState(false);
   const [minUst, setMinUst] = useState(MIN_STAKE_UST_FALLBACK);
   const [minUsd, setMinUsd] = useState(MIN_STAKE_USD);
+  const [minSol, setMinSol] = useState(0);
+  const [solPriceUsd, setSolPriceUsd] = useState(0);
   const [manualReferrer, setManualReferrer] = useState("");
 
   const referrer = searchParams.get("ref") || manualReferrer.trim() || undefined;
@@ -154,74 +156,27 @@ export default function StakingDashboard() {
     return details ? `${msg}\n${details}` : msg || "Transaction failed";
   }
 
-  // #region agent log
-  useEffect(() => {
-    fetch("http://127.0.0.1:7461/ingest/6be44dbf-6d75-468a-9657-edaa08940de1", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e39c62" },
-      body: JSON.stringify({
-        sessionId: "e39c62",
-        location: "StakingDashboard.tsx:client-constants",
-        message: "Client MIN_STAKE values at render",
-        data: { MIN_STAKE_USD, MIN_STAKE_UST_FALLBACK },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-      }),
-    }).catch(() => {});
-  }, []);
-  // #endregion
-
   useEffect(() => {
     fetch("/api/stake/min")
       .then((r) => r.json())
-      .then((data: { minUst?: number; minUsd?: number }) => {
-        const setMinUstOk =
-          typeof data.minUst === "number" && data.minUst >= 1;
-        const setMinUsdOk =
-          typeof data.minUsd === "number" && data.minUsd >= 1;
-        // #region agent log
-        fetch("http://127.0.0.1:7461/ingest/6be44dbf-6d75-468a-9657-edaa08940de1", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e39c62" },
-          body: JSON.stringify({
-            sessionId: "e39c62",
-            location: "StakingDashboard.tsx:api-stake-min-response",
-            message: "API /api/stake/min response and update decision",
-            data: {
-              rawMinUst: data.minUst,
-              rawMinUsd: data.minUsd,
-              typeofMinUsd: typeof data.minUsd,
-              setMinUstOk,
-              setMinUsdOk,
-            },
-            timestamp: Date.now(),
-            hypothesisId: "H2",
-          }),
-        }).catch(() => {});
-        // #endregion
-        if (setMinUstOk) {
-          setMinUst(data.minUst!);
+      .then(
+        (data: {
+          minUst?: number;
+          minUsd?: number;
+          minSol?: number;
+          solPriceUsd?: number;
+        }) => {
+          if (typeof data.minUst === "number" && data.minUst >= 1)
+            setMinUst(data.minUst);
+          if (typeof data.minUsd === "number" && data.minUsd >= 1)
+            setMinUsd(data.minUsd);
+          if (typeof data.minSol === "number" && data.minSol > 0)
+            setMinSol(data.minSol);
+          if (typeof data.solPriceUsd === "number" && data.solPriceUsd > 0)
+            setSolPriceUsd(data.solPriceUsd);
         }
-        if (setMinUsdOk) {
-          setMinUsd(data.minUsd!);
-        }
-      })
-      .catch((err) => {
-        // #region agent log
-        fetch("http://127.0.0.1:7461/ingest/6be44dbf-6d75-468a-9657-edaa08940de1", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e39c62" },
-          body: JSON.stringify({
-            sessionId: "e39c62",
-            location: "StakingDashboard.tsx:api-stake-min-fetch-error",
-            message: "Fetch /api/stake/min failed",
-            data: { errMessage: (err as Error).message },
-            timestamp: Date.now(),
-            hypothesisId: "H1",
-          }),
-        }).catch(() => {});
-        // #endregion
-      });
+      )
+      .catch(() => {});
   }, []);
 
   const refreshData = useCallback(async () => {
@@ -351,6 +306,19 @@ export default function StakingDashboard() {
     if (sol <= 0) {
       setError("Enter a valid SOL amount");
       return;
+    }
+    if (solPriceUsd > 0) {
+      const solUsd = sol * solPriceUsd;
+      if (solUsd < minUsd) {
+        const approxMinSol =
+          minSol > 0 ? minSol : solPriceUsd > 0 ? minUsd / solPriceUsd : 0;
+        setError(
+          `Minimum stake is $${minUsd} USD equivalent (currently ~${approxMinSol.toFixed(
+            3
+          )} SOL). You entered ~$${solUsd.toFixed(2)}.`
+        );
+        return;
+      }
     }
     console.log("[Stake-SOL] Starting stake with SOL:", sol, "wallet:", publicKey.toBase58().slice(0, 8) + "...");
     setLoading(true);
@@ -699,6 +667,11 @@ export default function StakingDashboard() {
                   className="w-full px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   disabled={loading}
                 />
+                {minSol > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Minimum ~{minSol.toFixed(3)} SOL (≈${minUsd} USD)
+                  </p>
+                )}
               </div>
 
               <button
@@ -781,6 +754,7 @@ export default function StakingDashboard() {
                       Math.ceil((s.unlockTime - now) / 86400)
                     );
                     const isUnlocked = s.status === "unlocked";
+                    const isWithdrawPending = s.status === "withdraw_pending";
 
                     return (
                       <div
@@ -862,6 +836,8 @@ export default function StakingDashboard() {
                             className={
                               s.status === "claimed"
                                 ? "text-slate-500"
+                                : s.status === "withdraw_pending"
+                                ? "text-amber-400"
                                 : "text-emerald-400"
                             }
                           >
@@ -869,24 +845,11 @@ export default function StakingDashboard() {
                               ? "Locked"
                               : s.status === "unlocked"
                               ? "Unlocked — choose Withdraw or Restake"
+                              : s.status === "withdraw_pending"
+                              ? "Withdrawal pending — waiting for confirmation"
                               : "Claimed"}
                           </span>
                         </div>
-
-                        {s.childWallet && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-400">Child Wallet</span>
-                            <a
-                              href={`https://explorer.solana.com/address/${s.childWallet}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-400 hover:underline font-mono text-xs"
-                            >
-                              {s.childWallet.slice(0, 6)}...
-                              {s.childWallet.slice(-4)}
-                            </a>
-                          </div>
-                        )}
 
                         {daysRemaining === 0 && s.status === "active" && (
                           <p className="text-sm text-emerald-300 mt-2 bg-emerald-950/30 px-3 py-2 rounded-lg">
@@ -895,7 +858,17 @@ export default function StakingDashboard() {
                           </p>
                         )}
 
-                        {isUnlocked && s.childWallet && (
+                        {isWithdrawPending && (
+                          <div className="mt-4 p-4 bg-amber-950/30 rounded-xl border border-amber-500/20">
+                            <p className="text-sm text-amber-300">
+                              Your withdrawal request has been submitted.
+                              Waiting for confirmation — you will receive your
+                              tokens shortly.
+                            </p>
+                          </div>
+                        )}
+
+                        {isUnlocked && (
                           <div className="mt-4 space-y-3 p-4 bg-slate-800/50 rounded-xl border border-emerald-500/20">
                             <p className="text-sm text-slate-300">
                               Choose how to use your staked amount + rewards:
@@ -931,13 +904,18 @@ export default function StakingDashboard() {
                                       publicKey.toBase58(),
                                       withdrawDestination.trim() || undefined
                                     );
-                                    setSuccess(
-                                      `Withdrawn ${(Number(result.amount) / 1_000_000).toFixed(
-                                        2
-                                      )} UST + ${(Number(result.totalReward) / 1_000_000).toFixed(
-                                        2
-                                      )} rewards. Tx: ${result.txSignature}`
-                                    );
+                                    if (result.status === "pending") {
+                                      setSuccess(
+                                        result.message ??
+                                          "Withdrawal requested. Waiting for confirmation."
+                                      );
+                                    } else {
+                                      setSuccess(
+                                        `Withdrawn ${(Number(result.amount) / 1_000_000).toFixed(
+                                          2
+                                        )} UST. Tx: ${result.txSignature}`
+                                      );
+                                    }
                                     await refreshData();
                                   } catch (e) {
                                     setError(
@@ -1074,9 +1052,16 @@ export default function StakingDashboard() {
                 setSuccess("");
                 try {
                   const result = await claimReferral(publicKey.toBase58());
-                  setSuccess(
-                    `Claimed ${(result.claimed / 1_000_000).toFixed(2)} UST (~$${result.claimedUsd}). Tx: ${result.txSignature}`
-                  );
+                  if (result.status === "pending") {
+                    setSuccess(
+                      result.message ??
+                        `Claim requested for ${(result.claimed / 1_000_000).toFixed(2)} UST (~$${result.claimedUsd}). Waiting for confirmation.`
+                    );
+                  } else {
+                    setSuccess(
+                      `Claimed ${(result.claimed / 1_000_000).toFixed(2)} UST (~$${result.claimedUsd}). Tx: ${result.txSignature}`
+                    );
+                  }
                   await refreshData();
                 } catch (e: unknown) {
                   setError((e as Error).message || "Claim failed");

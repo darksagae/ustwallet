@@ -156,9 +156,12 @@ export interface ReferralInfo {
 }
 
 export interface ClaimResult {
+  status: "pending" | "completed";
   claimed: number;
   claimedUsd: string;
-  txSignature: string;
+  txSignature: string | null;
+  requestId?: string;
+  message?: string;
 }
 
 export async function fetchReferralData(
@@ -196,9 +199,12 @@ export async function claimReferral(
     throw new Error(data.error || "Failed to claim referral rewards");
   }
   return {
-    claimed: Number(data.claimed),
-    claimedUsd: data.claimedUsd,
-    txSignature: data.txSignature,
+    status: data.status ?? "completed",
+    claimed: Number(data.requested ?? data.claimed ?? 0),
+    claimedUsd: data.requestedUsd ?? data.claimedUsd ?? "0",
+    txSignature: data.txSignature ?? null,
+    requestId: data.requestId,
+    message: data.message,
   };
 }
 
@@ -309,11 +315,20 @@ export async function registerStakeFromSol(
   };
 }
 
+export interface WithdrawResult {
+  status: "pending" | "completed";
+  requestId?: string;
+  txSignature: string | null;
+  amount: string;
+  totalReward?: string;
+  message?: string;
+}
+
 export async function withdrawStake(
   stakeId: string,
   wallet: string,
   destinationWallet?: string
-): Promise<{ txSignature: string; amount: string; totalReward: string }> {
+): Promise<WithdrawResult> {
   const res = await fetch("/api/stake/withdraw", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -324,9 +339,12 @@ export async function withdrawStake(
     throw new Error(data.error || "Failed to withdraw");
   }
   return {
-    txSignature: data.txSignature,
+    status: data.status ?? "completed",
+    requestId: data.requestId,
+    txSignature: data.txSignature ?? null,
     amount: data.amount,
     totalReward: data.totalReward,
+    message: data.message,
   };
 }
 
