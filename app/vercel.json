@@ -1,5 +1,11 @@
 {
   "buildCommand": "npm run build",
   "framework": "nextjs",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/admin/distribute-rewards",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }

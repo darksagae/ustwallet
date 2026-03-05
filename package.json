@@ -12,6 +12,7 @@
     "@solana/web3.js": "^1.95.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4",
     "@types/chai": "^4.3.17",
     "@types/node": "^20",
     "@types/mocha": "^10.0.7",
@@ -19,6 +20,7 @@
     "mocha": "^10.7.0",
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.2",
+    "tailwindcss": "^4",
     "typescript": "^5.5.0"
   }
 }

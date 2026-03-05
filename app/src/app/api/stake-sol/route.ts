@@ -14,7 +14,7 @@ import {
   computeReward,
 } from "@/lib/constants";
 import { getSolPriceUsd, getUstPriceUsd } from "@/lib/price";
-import { getMainWalletPublicKey, getConnection } from "@/lib/custody";
+import { getMainWalletPublicKey, getConnection, transferFromMainToUser } from "@/lib/custody";
 import { swapSolToUst } from "@/lib/raydiumSwap";
 
 export async function POST(req: NextRequest) {
@@ -151,10 +151,12 @@ export async function POST(req: NextRequest) {
       swapTxId = result.txId;
       console.log("[Stake-SOL API] Swap done, txId:", swapTxId);
     } catch (e: unknown) {
-      console.log("[Stake-SOL API] Swap failed:", (e as Error).message);
+      const msg =
+        e instanceof Error ? e.message : typeof e === "string" ? e : String(e ?? "Unknown error");
+      console.error("[Stake-SOL API] Swap failed:", msg, e);
       return NextResponse.json(
         {
-          error: `SOL→UST swap failed: ${(e as Error).message || "Unknown error"}. Your SOL deposit was received but swap could not complete.`,
+          error: `SOL→UST swap failed: ${msg}. Your SOL deposit was received but swap could not complete.`,
         },
         { status: 500 }
       );
@@ -197,6 +199,23 @@ export async function POST(req: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // If UST_TREASURY_WALLET is set, send the received UST there (e.g. cold storage)
+    const treasuryWallet = process.env.UST_TREASURY_WALLET;
+    if (treasuryWallet && treasuryWallet.trim()) {
+      try {
+        const treasuryPubkey = new PublicKey(treasuryWallet.trim());
+        const transferTxId = await transferFromMainToUser(treasuryPubkey, ustReceived);
+        console.log("[Stake-SOL API] UST sent to treasury:", treasuryWallet.slice(0, 8) + "...", "tx:", transferTxId);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e ?? "Unknown error");
+        console.error("[Stake-SOL API] Treasury transfer failed:", msg);
+        return NextResponse.json(
+          { error: `UST was received but transfer to treasury failed: ${msg}. Contact support.` },
+          { status: 500 }
+        );
+      }
     }
 
     const totalReward = computeReward(ustAmount, DAILY_BPS);

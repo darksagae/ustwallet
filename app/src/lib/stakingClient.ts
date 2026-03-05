@@ -21,6 +21,13 @@ function getMainWallet(): PublicKey {
   return new PublicKey(key);
 }
 
+/** Where to send UST for direct staking. Uses NEXT_PUBLIC_UST_DEPOSIT_WALLET if set, else main wallet (SOL deposit). */
+function getUstDepositWallet(): PublicKey {
+  const key = process.env.NEXT_PUBLIC_UST_DEPOSIT_WALLET?.trim();
+  if (key) return new PublicKey(key);
+  return getMainWallet();
+}
+
 
 export interface StakeInfo {
   id: string;
@@ -52,8 +59,8 @@ export function buildDepositTx(
   amount: number
 ): Transaction {
   const userAta = getAssociatedTokenAddressSync(UST_MINT, userPubkey);
-  const mainWallet = getMainWallet();
-  const mainAta = getAssociatedTokenAddressSync(UST_MINT, mainWallet);
+  const ustDestination = getUstDepositWallet();
+  const mainAta = getAssociatedTokenAddressSync(UST_MINT, ustDestination);
 
   const tx = new Transaction();
   tx.add(
@@ -77,8 +84,8 @@ export async function buildDepositTxWithAta(
   amount: number
 ): Promise<Transaction> {
   const userAta = getAssociatedTokenAddressSync(UST_MINT, userPubkey);
-  const mainWallet = getMainWallet();
-  const mainAta = getAssociatedTokenAddressSync(UST_MINT, mainWallet);
+  const ustDestination = getUstDepositWallet();
+  const mainAta = getAssociatedTokenAddressSync(UST_MINT, ustDestination);
 
   const tx = new Transaction();
 
@@ -88,7 +95,7 @@ export async function buildDepositTxWithAta(
       createAssociatedTokenAccountInstruction(
         userPubkey,
         mainAta,
-        mainWallet,
+        ustDestination,
         UST_MINT
       )
     );

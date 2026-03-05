@@ -51,12 +51,10 @@ import {
 import EmailSubscribe from "./EmailSubscribe";
 import {
   IconCoins,
-  IconCap,
   IconReward,
   IconReserved,
 } from "./icons";
 
-const CAP_DISPLAY = 5_000_000;
 const UST_DECIMALS = 6;
 
 /** Format raw UST (smallest units) as human-readable string, e.g. 818062833 -> "818.06" */
@@ -212,6 +210,8 @@ export default function StakingDashboard() {
   const parsedAmount = parseFloat(amount) || 0;
   const meetsMin = parsedAmount >= minUst;
   const projectedReward = meetsMin ? computeReward(parsedAmount, DAILY_BPS) : 0;
+  /** UST transfer uses raw units (6 decimals). User types human amount (e.g. 100). */
+  const amountRaw = Math.round(parsedAmount * 1_000_000);
 
   /** Prefer wallet sendTransaction (sign + send) to avoid "signature verification failed" when wallet blocks sign-only. */
   const sendAndConfirm = async (
@@ -252,7 +252,7 @@ export default function StakingDashboard() {
     }
     if (!meetsMin) {
       setError(
-        `Minimum stake is $${minUsd} USD equivalent (currently ~${minUst.toLocaleString()} UST)`
+        `Minimum stake is $${minUsd} USD worth of UST (≈${minUst.toLocaleString()} UST). You entered ${parsedAmount.toFixed(2)} UST.`
       );
       return;
     }
@@ -261,7 +261,7 @@ export default function StakingDashboard() {
       const tx = await buildDepositTxWithAta(
         connection,
         publicKey,
-        parsedAmount
+        amountRaw
       );
       let signature: string;
       let conn: Connection = connection;
@@ -279,7 +279,7 @@ export default function StakingDashboard() {
           const txRetry = await buildDepositTxWithAta(
             connection,
             publicKey,
-            parsedAmount
+            amountRaw
           );
           signature = await sendAndConfirm(conn, txRetry);
         } else {
@@ -290,11 +290,11 @@ export default function StakingDashboard() {
       const stakeResult = await registerStake(
         publicKey.toBase58(),
         signature,
-        parsedAmount,
+        amountRaw,
         referrer
       );
       setSuccess(
-        `Staked ${stakeResult.amount} UST at ${DAILY_PCT}% daily. Tx: ${signature}`
+        `Staked ${(stakeResult.amount / 1_000_000).toFixed(2)} UST at ${DAILY_PCT}% daily. Tx: ${signature}`
       );
       setAmount("");
       await refreshData();
@@ -385,19 +385,53 @@ export default function StakingDashboard() {
   const anyActiveStake = stakes.some((s) => s.status === "active");
 
   const poolTotalStaked = poolData?.totalStaked ?? 0;
-  const poolCap = poolData?.capTotalStaked ?? CAP_DISPLAY;
   const poolRewardMax = poolData?.rewardPoolMax ?? 0;
   const poolRewardReserved = poolData?.rewardPoolReserved ?? 0;
-  const capPct =
-    poolCap > 0 ? Math.min(100, (poolTotalStaked / poolCap) * 100) : 0;
+
+  // Accrued progress toward 90-day goal: (tokens received so far) / (total 90-day reward goal)
+  // accrued from API is in raw units; totalReward is in human UST
+  const totalAccruedRaw = stakes.reduce((sum, s) => sum + s.accrued, 0);
+  const totalGoalHuman = stakes.reduce((sum, s) => sum + s.totalReward, 0);
+  const totalAccruedHuman = totalAccruedRaw / 1_000_000;
+  const accruedProgressPct =
+    totalGoalHuman > 0 ? Math.min(100, (totalAccruedHuman / totalGoalHuman) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950/30 to-slate-900 text-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950/30 to-slate-900 text-slate-100 relative">
+      {/* Fixed background globe — stays in place while page scrolls */}
+      <div
+        className="fixed inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0"
+        aria-hidden
+      >
+        <div
+          className="w-[320px] h-[320px] md:w-[400px] md:h-[400px] rounded-full overflow-hidden opacity-25"
+          style={{
+            boxShadow: "inset -15px -15px 30px rgba(0,0,0,0.3), 0 0 0 1px rgba(16, 185, 129, 0.15)",
+          }}
+        >
+          <div
+            className="h-full w-[200%] bg-slate-800"
+            style={{
+              backgroundImage: `url("https://upload.wikimedia.org/wikipedia/commons/8/83/Equirectangular_projection_SW.jpg")`,
+              backgroundSize: "50% 100%",
+              backgroundRepeat: "repeat-x",
+              backgroundPosition: "0 0",
+              animation: "globe-rotate 40s linear infinite",
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="relative z-10">
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center font-bold text-lg shadow-lg shadow-emerald-500/25">
-            U
-          </div>
+          <Image
+            src="/tokenlogo.png"
+            alt="UST Wallet"
+            width={40}
+            height={40}
+            className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-emerald-500/25"
+          />
           <div>
             <h1 className="text-xl font-bold text-white">UST Wallet</h1>
             <p className="text-xs text-slate-500">Season 1 Lock Event</p>
@@ -425,45 +459,7 @@ export default function StakingDashboard() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-20">
-          <svg
-            viewBox="0 0 200 200"
-            className="w-64 h-64 md:w-80 md:h-80 text-emerald-500/50"
-          >
-            <circle
-              cx="100"
-              cy="100"
-              r="60"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
-            <circle
-              cx="100"
-              cy="100"
-              r="40"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="0.5"
-            />
-            <path
-              d="M100 50 Q140 100 100 150 Q60 100 100 50"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              opacity="0.6"
-            />
-            <path
-              d="M50 100 Q100 60 150 100 Q100 140 50 100"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              opacity="0.6"
-            />
-          </svg>
-        </div>
+      <section className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center relative">
         <div className="flex justify-center mb-4">
           <Image
             src="/tokenlogo.png"
@@ -506,46 +502,45 @@ export default function StakingDashboard() {
           </div>
         </div>
 
-        {/* Cap Progress — shown after connecting; shows pool fill and your accrued progress */}
+        {/* Accrued progress toward 90-day goal — dynamic based on tokens received */}
         {connected && (
           <div className="bg-slate-900/50 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-6 glow-card">
             <p className="text-slate-400 text-sm mb-2">
-              {poolCap.toLocaleString()} UST Max
+              Accrued progress to reach your 90-day goal
             </p>
             <div className="h-4 bg-slate-800 rounded-full overflow-hidden mb-2">
               <div
                 className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-700 rounded-full"
-                style={{ width: `${capPct}%` }}
+                style={{ width: `${accruedProgressPct}%` }}
               />
             </div>
             <p className="text-lg font-bold text-white">
-              {capPct === 0 ? (
+              {stakes.length === 0 ? (
                 <span className="text-slate-500">
-                  0% Filled — Be First To Lock
+                  Stake UST to see your progress
                 </span>
+              ) : totalGoalHuman === 0 ? (
+                <span className="text-slate-500">0% — calculating goal</span>
               ) : (
-                <CountUp value={Math.round(capPct)} suffix="% Filled" />
+                <>
+                  <CountUp value={Math.round(accruedProgressPct)} suffix="% of your 90-day reward" />
+                </>
               )}
             </p>
             <p className="text-xs text-slate-500 mt-2">
-              Your accrued rewards below update every hour over the 90-day lock.
+              {stakes.length > 0 && totalGoalHuman > 0
+                ? `Tokens received: ${totalAccruedHuman.toFixed(2)} / ${totalGoalHuman.toFixed(2)} UST reward goal. Updates hourly.`
+                : "Your accrued rewards below update every hour over the 90-day lock."}
             </p>
           </div>
         )}
 
         {/* Stats — values are raw (smallest units); display as UST with 2 decimals */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
           <StatCard
             icon={<IconCoins className="w-8 h-8 text-emerald-400" />}
             label="Total Staked"
             value={poolTotalStaked}
-            suffix=" UST"
-            formatAsUst
-          />
-          <StatCard
-            icon={<IconCap className="w-8 h-8 text-emerald-400" />}
-            label="Event Cap"
-            value={poolCap}
             suffix=" UST"
             formatAsUst
           />
@@ -569,30 +564,7 @@ export default function StakingDashboard() {
       <main className="max-w-6xl mx-auto px-6 py-10 grid gap-8 lg:grid-cols-3">
         {/* Staking Form */}
         <div className="lg:col-span-2 bg-slate-900/50 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-6 glow-card animate-float">
-          {/* Pay Mode Tabs */}
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => setPayMode("ust")}
-              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                payMode === "ust"
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
-                  : "bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700/60"
-              }`}
-            >
-              Stake with UST
-            </button>
-            <button
-              onClick={() => setPayMode("sol")}
-              className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                payMode === "sol"
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
-                  : "bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700/60"
-              }`}
-            >
-              Stake UST using SOL
-            </button>
-          </div>
-
+          {/* Direct UST staking only — "Stake UST using SOL" disabled (sends to wrong address) */}
           <div className="mb-4">
             <label className="block text-sm text-slate-400 mb-1">
               Referral code (optional)
@@ -606,93 +578,59 @@ export default function StakingDashboard() {
             />
           </div>
 
-          {payMode === "ust" ? (
-            <>
-              <h2 className="text-xl font-bold mb-6 text-white">Stake UST</h2>
-              <p className="text-slate-400 text-sm mb-4">
-                You need UST in your wallet. Enter amount to send from your wallet.
-              </p>
-              <div className="mb-4">
-                <label className="block text-sm text-slate-400 mb-1">
-                  Amount (UST)
-                </label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder={`Min ${minUst.toLocaleString()} UST ($${minUsd} USD)`}
-                  className="w-full px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  disabled={loading}
-                />
+          <h2 className="text-xl font-bold mb-6 text-white">Stake UST</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            You need UST in your wallet. Enter amount to send from your wallet.
+          </p>
+          <p className="text-amber-400/90 text-sm mb-4 font-medium">
+            Minimum stake: ${minUsd} USD worth of UST (≈{minUst.toLocaleString()} UST).
+          </p>
+          <div className="mb-4">
+            <label className="block text-sm text-slate-400 mb-1">
+              Amount (UST)
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={`Min ${minUst.toLocaleString()} UST`}
+              min={minUst}
+              step="any"
+              className="w-full px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+              disabled={loading}
+            />
+          </div>
+
+          {meetsMin && (
+            <div className="mb-6 p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-slate-400">Daily Return</span>
+                <span className="text-emerald-400 text-lg font-bold glow-emerald">
+                  {DAILY_PCT}%
+                </span>
               </div>
-
-              {meetsMin && (
-                <div className="mb-6 p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-slate-400">Daily Return</span>
-                    <span className="text-emerald-400 text-lg font-bold glow-emerald">
-                      {DAILY_PCT}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-slate-400">Lock Period</span>
-                    <span>{LOCK_DAYS} days</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">
-                      Projected Total Reward
-                    </span>
-                    <span className="text-emerald-400 font-bold">
-                      {projectedReward.toFixed(2)} UST
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handleStake}
-                disabled={loading || !connected || !meetsMin}
-                className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5"
-              >
-                {loading ? "Processing..." : "Stake UST"}
-              </button>
-            </>
-          ) : (
-            <>
-              <h2 className="text-xl font-bold mb-6 text-white">
-                Stake UST using SOL
-              </h2>
-              <div className="mb-4">
-                <label className="block text-sm text-slate-400 mb-1">
-                  Amount (SOL)
-                </label>
-                <input
-                  type="number"
-                  value={solAmount}
-                  onChange={(e) => setSolAmount(e.target.value)}
-                  placeholder="Enter SOL amount"
-                  step="0.01"
-                  className="w-full px-4 py-3 bg-slate-800/80 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  disabled={loading}
-                />
-                {minSol > 0 && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Minimum ~{minSol.toFixed(3)} SOL (≈${minUsd} USD)
-                  </p>
-                )}
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-slate-400">Lock Period</span>
+                <span>{LOCK_DAYS} days</span>
               </div>
-
-              <button
-                onClick={handleStakeWithSol}
-                disabled={
-                  loading || !connected || (parseFloat(solAmount) || 0) <= 0
-                }
-                className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5"
-              >
-                {loading ? "Processing..." : "Stake UST using SOL"}
-              </button>
-            </>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">
+                  Projected Total Reward
+                </span>
+                <span className="text-emerald-400 font-bold">
+                  {projectedReward.toFixed(2)} UST
+                </span>
+              </div>
+            </div>
           )}
+
+          <button
+            onClick={handleStake}
+            disabled={loading || !connected || !meetsMin}
+            className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5"
+          >
+            {loading ? "Processing..." : "Stake UST"}
+          </button>
 
           {error && (
             <p className="mt-3 text-sm text-red-400 bg-red-950/30 px-4 py-2 rounded-lg">
@@ -712,7 +650,10 @@ export default function StakingDashboard() {
                 {DAILY_PCT}% Daily
               </p>
               <p className="text-slate-400 text-sm">
-                {DAILY_PCT * LOCK_DAYS}% total over {LOCK_DAYS} days &middot; Min ${minUsd} USD (≈{minUst.toLocaleString()} UST)
+                {DAILY_PCT * LOCK_DAYS}% total over {LOCK_DAYS} days
+              </p>
+              <p className="text-slate-500 text-xs mt-1">
+                Minimum: ${minUsd} USD worth of UST (≈{minUst.toLocaleString()} UST)
               </p>
             </div>
           </div>
@@ -1173,6 +1114,7 @@ export default function StakingDashboard() {
       <footer className="border-t border-white/5 py-6 text-center text-xs text-slate-600">
         UST Wallet · Season 1 Lock Event · 90-Day Supply Lock
       </footer>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,10 @@ export const UST_MINT = new PublicKey(
   process.env.NEXT_PUBLIC_UST_MINT || "11111111111111111111111111111111"
 );
 
+/** UST token decimals (raw units per 1 UST). Used to convert human amount ↔ raw for transfers. */
+export const UST_DECIMALS = 6;
+export const UST_RAW_PER_UNIT = 10 ** UST_DECIMALS;
+
 export const RPC_URL =
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
 
@@ -14,11 +18,11 @@ export const RPC_FALLBACK_URL =
 export const LOCK_DAYS = 90;
 export const DAILY_BPS = 100; // 1% daily
 export const DAILY_PCT = 1;
-/** Minimum stake in USD. Use NEXT_PUBLIC_ for client (browser); MIN_ for server. Testing: set both to 1; prod: 50. */
+/** Minimum stake: USD worth of UST required. Transactions below this do not go through. Use NEXT_PUBLIC_ for client; MIN_ for server. */
 export const MIN_STAKE_USD = Number(
   process.env.NEXT_PUBLIC_MIN_STAKE_USD ?? process.env.MIN_STAKE_USD ?? "50"
 );
-/** Fallback min UST when price unavailable. Use NEXT_PUBLIC_ for client; MIN_ for server. */
+/** Fallback min UST when price unavailable (still enforced as minimum USD worth). */
 export const MIN_STAKE_UST_FALLBACK = Number(
   process.env.NEXT_PUBLIC_MIN_STAKE_UST_FALLBACK ?? process.env.MIN_STAKE_UST_FALLBACK ?? "50"
 );

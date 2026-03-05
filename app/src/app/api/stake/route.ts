@@ -55,7 +55,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const mainWallet = getMainWalletPublicKey();
+    // Direct UST staking: use UST deposit wallet if set, else main wallet (so tx shows correct recipient)
+    const mainWallet = process.env.NEXT_PUBLIC_UST_DEPOSIT_WALLET?.trim()
+      ? new PublicKey(process.env.NEXT_PUBLIC_UST_DEPOSIT_WALLET)
+      : getMainWalletPublicKey();
     const mainAta = getAssociatedTokenAddressSync(UST_MINT, mainWallet);
     const userPubkey = new PublicKey(wallet);
     const userAta = getAssociatedTokenAddressSync(UST_MINT, userPubkey);
@@ -109,17 +112,19 @@ export async function POST(req: NextRequest) {
     const minUst =
       ustPrice > 0
         ? Math.max(1, Math.ceil(MIN_STAKE_USD / ustPrice))
-        : MIN_STAKE_UST_FALLBACK;
-    if (amount < minUst) {
+        : Math.max(1, MIN_STAKE_UST_FALLBACK);
+    // amount from client is in raw token units (6 decimals). Restriction: minimum is $X USD worth of UST.
+    const amountHuman = Number(amount) / 1_000_000;
+    if (amountHuman < minUst) {
       return NextResponse.json(
         {
-          error: `Minimum stake is $${MIN_STAKE_USD} USD equivalent (currently ~${minUst.toLocaleString()} UST)`,
+          error: `Minimum stake is $${MIN_STAKE_USD} USD worth of UST (≈${minUst.toLocaleString()} UST). You sent ${amountHuman.toFixed(2)} UST.`,
         },
         { status: 400 }
       );
     }
 
-    const totalReward = computeReward(amount, DAILY_BPS);
+    const totalReward = computeReward(amountHuman, DAILY_BPS);
     const nowUnix = Math.floor(Date.now() / 1000);
     const unlockTime = nowUnix + LOCK_DAYS * 86400;
 
@@ -162,6 +167,18 @@ export async function POST(req: NextRequest) {
       } catch {
         // invalid referrer pubkey or duplicate — skip silently
       }
+    }
+
+    // Trigger referral distribution so referrer gets their share right after this successful stake (testing: no need to wait for cron).
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      fetch(`${base}/api/admin/distribute-rewards`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cronSecret}` },
+      }).catch((e) => console.error("[stake] distribute-rewards trigger:", e));
     }
 
     return NextResponse.json({
